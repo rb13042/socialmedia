@@ -9,9 +9,7 @@ const signupUser = async(req,res)=>{
     const {name,username,email,password} = req.body;
     const user = await User.findOne({$or:[{email},{username}]});
     if(user){
-      return res.status(400).json({
-        message:"Users already exist"
-      });
+      return res.status(400).json({error:"Users already exist"});
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -42,7 +40,7 @@ const signupUser = async(req,res)=>{
     else
     {
       res.status(400).json({
-        message:"Invalid user data"
+        error:"Invalid user data"
       });
     }
 
@@ -154,4 +152,60 @@ const FollowUnFollowUser = async(req,res)=>{
   }
 }
 
-export {signupUser,loginUser,logoutUser,FollowUnFollowUser};
+//update the user profile
+const updateUser = async(req,res)=>{
+   const { name,email,username,password,profilePic,bio} = req.body;
+   const userId = req.user._id;
+ 
+     
+  try {
+   
+    let user = await User.findById(userId);
+    if(!user) return res.status(404).json({message:"User not found"});
+
+    if(req.params.id !== userId.toString()) return res.status(400).json({message:"You are not authorized to update this user"});
+
+    if(password){
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password,salt);
+      user.password = hashedPassword;
+    }
+
+    user.name  = name || user.name;
+    user.email = email || user.email;
+    user.username = username || user.username;
+    user.profilePic = profilePic || user.profilePic;
+    user.bio = bio || user.bio;
+    
+    user = await user.save();
+    res.status(200).json({
+      message:"profile updated successfully",
+      user
+    });
+
+  } catch (err) {
+    
+     res.status(500).json({
+      error: err.message
+    });
+    console.log("Error in updating the user : ",err.message );
+  }
+}
+
+//to get the profile using username 
+const getUserProfile = async(req,res)=>{
+     try {
+              
+          const {username} = req.params;
+          const user = await User.findOne({username}).select("-password").select("-updatedAt");
+          if(!user) return res.status(404).json({message:"User not found"});
+          res.status(200).json({user});
+         
+     } catch (err) {
+       
+          res.status(500).json({error: err.message});
+          console.log("Error in getting  the profile : ",err.message );
+     }
+}
+
+export {signupUser,loginUser,logoutUser,FollowUnFollowUser,updateUser,getUserProfile};
