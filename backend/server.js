@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import dotenv from 'dotenv';
 import connectDB from './db/connectDB.js';
 import cookieParser from 'cookie-parser';
@@ -22,6 +23,8 @@ connectDB();
 
 const PORT = process.env.PORT;
 
+const _dirname = path.resolve();
+
 //MIDDLEWARE(s)
 
 app.use(express.urlencoded({ limit: '100mb',extended: true ,parameterLimit: 50000}));//to parse url encoded data
@@ -32,6 +35,14 @@ app.use(cookieParser()); //To use cookies in our application(especially in req o
 app.use("/api/users",userRoutes);
 app.use("/api/posts",postRoutes);
 app.use("/api/messages",messageRoutes);
+
+if(process.env.NODE_ENV == "production"){
+  app.use(express.static(path.join(_dirname,"/frontend/dist")));
+
+  app.get("*",(req,res)=>{
+    res.sendFile(path.resolve(_dirname,"frontend","dist","index.html"));
+  })
+}
 
 
 server.listen(5000,()=>{
