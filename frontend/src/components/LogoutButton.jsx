@@ -1,12 +1,16 @@
 import { Button } from "@chakra-ui/react";
 import React from "react";
-import { useSetRecoilState } from "recoil";
+import { useRecoilState, useSetRecoilState } from "recoil";
 import userAtom from "../atoms/userAtom";
 import useShowToast from "../hooks/useShowToast";
-
+import { AiOutlineLogout } from "react-icons/ai";
+import { selectedConversationAtom } from "../atoms/messagesAtom";
 const LogoutButton = () => {
   const setuser = useSetRecoilState(userAtom);
   const showToast = useShowToast();
+  const [selectedConversation, setselectedConversation] = useRecoilState(
+    selectedConversationAtom
+  );
   const handleLogout = async () => {
     try {
       //fetch
@@ -24,19 +28,20 @@ const LogoutButton = () => {
       }
       localStorage.removeItem("user-thread");
       setuser(null);
+      //to default value
+      setselectedConversation({
+        _id: "",
+        userId: "",
+        username: "",
+        userProfilePic: "",
+      });
     } catch (error) {
       showToast("Error", error, "error");
     }
   };
   return (
-    <Button
-      position={"fixed"}
-      top={"30px"}
-      right={"30px"}
-      size={"sm"}
-      onClick={handleLogout}
-    >
-      Logout
+    <Button size={"sm"} onClick={handleLogout}>
+      <AiOutlineLogout size={20} />
     </Button>
   );
 };

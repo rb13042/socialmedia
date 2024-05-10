@@ -1,7 +1,10 @@
 import User from "../db/models/userModel.js";
 import bcrypt from "bcryptjs";
 import generateTokensAndSetCookies from "../utilis/helpers/generateTokenAndSetCookie.js";
-
+import {v2 as cloudinary} from 'cloudinary';
+import { Mongoose } from "mongoose";
+import mongoose from "mongoose";
+import Post from "../db/models/postModel.js";
 //sign up
 const signupUser = async(req,res)=>{
 
@@ -20,6 +23,7 @@ const signupUser = async(req,res)=>{
       username,
       email,
       password:hashedPassword
+ 
     });
 
     await newUser.save();
@@ -35,6 +39,8 @@ const signupUser = async(req,res)=>{
         name:newUser.name,
         username:newUser.username,
         email:newUser.email,
+        profilePic:newUser.profilePic,
+        bio:newUser.bio,
       });
     }
     else
@@ -74,6 +80,8 @@ const loginUser = async(req,res)=>{
       name:user.name,
       username:user.username,
       email:user.email,
+      bio:user.bio,
+      profilePic:user.profilePic,
     });
     
   } catch (error) {
@@ -154,7 +162,8 @@ const FollowUnFollowUser = async(req,res)=>{
 
 //update the user profile
 const updateUser = async(req,res)=>{
-   const { name,email,username,password,profilePic,bio} = req.body;
+   const { name,email,username,password,bio} = req.body;
+   let {profilePic} = req.body;
    const userId = req.user._id;
  
      
@@ -171,6 +180,16 @@ const updateUser = async(req,res)=>{
       user.password = hashedPassword;
     }
 
+    if(profilePic)
+    {
+        if(user.profilePic){
+          await cloudinary.uploader.destroy(user.profilePic.split("/").pop().split(".")[0]);
+        }
+
+        const uploadedResponse = await cloudinary.uploader.upload(profilePic);
+        profilePic = uploadedResponse.secure_url;
+    }
+
     user.name  = name || user.name;
     user.email = email || user.email;
     user.username = username || user.username;
@@ -178,10 +197,19 @@ const updateUser = async(req,res)=>{
     user.bio = bio || user.bio;
     
     user = await user.save();
-    res.status(200).json({
-      message:"profile updated successfully",
-      user
-    });
+
+    await Post.updateMany(
+      {"replies.userId":userId},
+      {
+        $set:{
+          "replies.$[reply].username":user.username,
+          "replies.$[reply].userProfilePic":user.profilePic
+
+        }
+      },
+      {arrayFilters:[{"reply.userId":userId}]}
+    )
+    res.status(200).json(user);
 
   } catch (err) {
     
@@ -196,10 +224,20 @@ const updateUser = async(req,res)=>{
 const getUserProfile = async(req,res)=>{
      try {
               
-          const {username} = req.params;
-          const user = await User.findOne({username}).select("-password").select("-updatedAt");
-          if(!user) return res.status(404).json({message:"User not found"});
-          res.status(200).json({user});
+          const {query} = req.params;
+          console.log(query);
+          let user;
+          if(mongoose.Types.ObjectId.isValid(query))
+          {
+            console.log(mongoose.Types.ObjectId.isValid(query));
+            user = await User.findOne({_id:query}).select("-password").select("-updatedAt");
+          }
+          else
+          {
+            user = await User.findOne({username:query}).select("-password").select("-updatedAt");
+          }
+          if(!user) return res.status(404).json({error:"User not found"});
+          res.status(200).json(user);
          
      } catch (err) {
        
@@ -208,4 +246,36 @@ const getUserProfile = async(req,res)=>{
      }
 }
 
-export {signupUser,loginUser,logoutUser,FollowUnFollowUser,updateUser,getUserProfile};
+const getSuggestedUsers = async(req,res)=>{
+  try {
+    const userId = req.user._id;
+
+    const usersFollowedByYou = await User.findById(userId).select("following");
+
+    const users = await User.aggregate([
+      {
+        $match:{
+           _id:{$ne:userId},
+        }
+      },
+      {
+        $sample:{
+          size:10
+        }
+
+      }
+    ])
+    const filteredUsers = users.filter(user => !usersFollowedByYou.following.includes(user._id));
+    const suggestedUsers = filteredUsers.slice(0,4);
+
+    suggestedUsers.forEach(user => user.password = null);
+
+    res.status(200).json(suggestedUsers);
+   } catch (err) {
+       res.status(500).json({error: err.message});
+      console.log("Error in getting  the suggested users : ",err.message );
+    
+  }
+}
+
+export {signupUser,loginUser,logoutUser,FollowUnFollowUser,updateUser,getUserProfile,getSuggestedUsers};

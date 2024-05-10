@@ -1,10 +1,11 @@
 import Post from "../db/models/postModel.js";
 import User from "../db/models/userModel.js";
-
+import {v2 as cloudinary} from 'cloudinary';
 //for creating a post
 const createPost = async(req,res)=>{
 try{
-      const {postedBy , text , img} = req.body;
+      const {postedBy , text } = req.body;
+      let {img} = req.body;
 
       if(!postedBy || !text)return res.status(400).json({error: "PostedBy and textfields are required"});
 
@@ -21,6 +22,13 @@ try{
       const maxLength = 500;
       if(text.length > maxLength){
         return res.status(400).json({error: `Text should be less than ${maxLength} characters`});
+      }
+
+      if(img)
+      {
+               const uploadedResponse = await cloudinary.uploader.upload(img);
+               img = uploadedResponse.secure_url;
+
       }
 
       const newPost = new Post({postedBy , text , img});
@@ -71,6 +79,11 @@ const deletePost = async(req,res)=>{
             if(!req.user || post.postedBy.toString()!==req.user._id.toString()){
               return res.status(401).json({error: " You are Unauthorized to delete the post"});
             }
+
+             if(post.img){
+              const ImgId = post.img.split("/").pop().split(".")[0] ;
+              await cloudinary.uploader.destroy(ImgId);
+             }
 
             await Post.findByIdAndDelete(req.params.id);
 
@@ -129,7 +142,7 @@ const replyToPost = async(req,res)=>{
     if(!text) return res.status(400).json({error: "Text is required for replying"});
 
 
-    const post = await Post.findById(postId);
+    let post = await Post.findById(postId);
 
     if(!post)return res.status(404).json({error: "Post not found"});
 
@@ -137,7 +150,8 @@ const replyToPost = async(req,res)=>{
 
     await Post.updateOne({_id:postId},{$push:{replies:reply}});
 
-    res.status(200).json({message: "Reply added successfully",post});
+    post = await Post.findById(postId);
+    res.status(200).json(post);
   } catch (err) {
         res.status(500).json({error: err.message});
          console.log("Error in replyToPost: ",err.message );
@@ -156,7 +170,7 @@ const getFeedPost = async(req,res)=>{
 
               const feedPosts = await Post.find({postedBy:{$in:following}}).sort({createdAt:-1}); //sort in descending order of days(latest at the top)
 
-              res.status(200).json({message: "Feed posts fetched successfully",feedPosts});
+              res.status(200).json(feedPosts);
 
           } catch (err) {
               res.status(500).json({error: err.message});
@@ -166,4 +180,19 @@ const getFeedPost = async(req,res)=>{
           
 }
 
-export {createPost,getPost,deletePost,LikeUnlikePost,replyToPost,getFeedPost};
+const getUserPosts = async(req,res)=>{
+  const {username} = req.params; 
+  try {
+     const user  = await User.findOne({username});
+     if(!user)return res.status(404).json({error: "User not found"});
+
+     const posts = await Post.find({postedBy:user._id}).sort({createdAt:-1});
+     res.status(200).json(posts);
+  } catch (error) {
+     res.status(500).json({error: err.message});
+  }
+       
+        
+}
+
+export {createPost,getPost,deletePost,LikeUnlikePost,replyToPost,getFeedPost,getUserPosts};
