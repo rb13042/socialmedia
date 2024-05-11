@@ -9,6 +9,7 @@ import  messageRoutes  from './routes/messageRoutes.js'
 import {app,server} from './socket/socket.js'
 dotenv.config(); 
 import {v2 as cloudinary} from 'cloudinary';
+import job from './cron/cron.js';
           
 cloudinary.config({ 
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
@@ -18,7 +19,7 @@ cloudinary.config({
 
 connectDB();
 
-
+job.start();
 
 
 const PORT = process.env.PORT;
